@@ -1,0 +1,7 @@
+WINDOWS ENVIRONMENT
+
+PREMISE:
+Build an Automox Worklet that installs the El Toro Drata Agent on 
+newly deployed Windows 11 systems
+
+

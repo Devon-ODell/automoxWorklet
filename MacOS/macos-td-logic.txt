@@ -1,0 +1,67 @@
+#!/bin/bash
+
+#================================================================
+# HEADER
+#================================================================
+#  SYNOPSIS
+#    Installs the Drata Agent on the target device
+#
+#  DESCRIPTION
+#    This worklet checks to see if the Drata Agent is installed
+#    on the target device and if it isn't, installs and registers the
+#    SentinelOne Agent on the device.
+#
+#  USAGE
+#    ./remediation.sh
+#
+#  EXAMPLE
+#    rpm_filename="SentinelAgent_linux_v21_6_3_7.rpm"
+#    deb_filename="SentinelAgent_linux_v21_6_3_7.deb"
+#    site_token="ABCD123"
+#
+# END_OF_HEADER
+#================================================================
+
+#########################
+rpm_filename=""
+deb_filename=""
+site_token=""
+#########################
+# CONSTANTS
+rpm_installer="$(pwd)/$rpm_filename"
+deb_installer="$(pwd)/$deb_filename"
+#########################
+
+# Check if SentinelOne is already installed
+if sudo sentinelctl version > /dev/null; then
+  echo "Software is already installed"
+  exit 0
+fi
+
+install_command=""
+# Define install command based on system type
+if [ -x "$(command -v dpkg)" ]; then
+  echo "Installing $deb_installer"
+
+  install_command="sudo dpkg -i $deb_installer"
+elif [ -x "$(command -v rpm)" ]; then
+  echo "Installing $rpm_installer"
+
+  install_command="sudo rpm -i --nodigest $rpm_installer"
+else
+  echo "Unable to install software; either rpm or dpkg package manager must be present on system"
+  exit 1
+fi
+
+if eval "$install_command"; then
+  echo "Software successfully installed"
+
+  echo "Registering SentinelOne agent"
+  sudo /opt/sentinelone/bin/sentinelctl management token set "$site_token"
+  sudo /opt/sentinelone/bin/sentinelctl control start
+  exit 0
+else
+  echo "Software failed to install"
+  exit 1
+fi
+

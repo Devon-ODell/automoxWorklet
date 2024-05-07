@@ -1,0 +1,276 @@
+GENERAL PRACTICES
+
+FUNCTIONALITY
+What does this achieve?
+
+bash script, Automox has documentation for pre-built scripts to automatically deploy SentinelOne agents on Windows, Linux, and MacOS. Start with this:
+
+
+LINUX/UBUNTU
+
+
+#!/bin/bash
+
+#================================================================
+# HEADER
+#================================================================
+#  SYNOPSIS
+#    Installs the SentinelOne agent on the endpoint.
+#
+#  DESCRIPTION
+#    This worklet will check to see if the SentinelOne agent is
+#    installed on the target device.
+#
+#  USAGE
+#    ./evaluation.sh
+#
+#================================================================
+#  IMPLEMENTATION
+#    version         STRAT-1_install_sentinelone_agent (www.automox.com) 1.0
+#    author          Zac Youtz
+#
+#================================================================
+#  HISTORY
+#    8/13/2021 : Zac Youtz : Script creation
+# 
+#================================================================
+# END_OF_HEADER
+#================================================================
+
+# evaluate the device to see if the Sentinel One is installed
+if sudo sentinelctl version > /dev/null; then
+  echo "Software is already installed"
+  exit 0
+else
+  echo "Software not installed - Flagging for installation"
+  exit 1
+fi
+
+
+And then, on target device:
+
+#!/bin/bash
+
+#================================================================
+# HEADER
+#================================================================
+#  SYNOPSIS
+#    Installs the SentinelOne Agent on the target device
+#
+#  DESCRIPTION
+#    This worklet checks to see if the SentinelOne Agent is installed
+#    on the target device and if it isn't, installs and registers the
+#    SentinelOne Agent on the device.
+#
+#  USAGE
+#    ./remediation.sh
+#
+#  EXAMPLE
+#    rpm_filename="SentinelAgent_linux_v21_6_3_7.rpm"
+#    deb_filename="SentinelAgent_linux_v21_6_3_7.deb"
+#    site_token="ABCD123"
+#
+#================================================================
+#  IMPLEMENTATION
+#    version         STRAT-1_install_sentinelone_agent (www.automox.com) 1.0
+#    author          Zac Youtz
+#
+#================================================================
+#  HISTORY
+#     8/13/2021 : Zac Youtz : Script creation
+#
+#
+#================================================================
+# END_OF_HEADER
+#================================================================
+
+#########################
+rpm_filename=""
+deb_filename=""
+site_token=""
+#########################
+# CONSTANTS
+rpm_installer="$(pwd)/$rpm_filename"
+deb_installer="$(pwd)/$deb_filename"
+#########################
+
+# Check if SentinelOne is already installed
+if sudo sentinelctl version > /dev/null; then
+  echo "Software is already installed"
+  exit 0
+fi
+
+install_command=""
+# Define install command based on system type
+if [ -x "$(command -v dpkg)" ]; then
+  echo "Installing $deb_installer"
+
+  install_command="sudo dpkg -i $deb_installer"
+elif [ -x "$(command -v rpm)" ]; then
+  echo "Installing $rpm_installer"
+
+  install_command="sudo rpm -i --nodigest $rpm_installer"
+else
+  echo "Unable to install software; either rpm or dpkg package manager must be present on system"
+  exit 1
+fi
+
+if eval "$install_command"; then
+  echo "Software successfully installed"
+
+  echo "Registering SentinelOne agent"
+  sudo /opt/sentinelone/bin/sentinelctl management token set "$site_token"
+  sudo /opt/sentinelone/bin/sentinelctl control start
+  exit 0
+else
+  echo "Software failed to install"
+  exit 1
+fi
+
+
+WINDOWS
+
+<#
+.SYNOPSIS
+    Evaluate the existence of the SentinelOne agent
+    OS Support: Windows 7 and above
+    Required modules: NONE
+.DESCRIPTION
+    This worklet will ensure the SentinelOne agent is installed on the targeted devices.
+    The environment specific installer will need to be uploaded to the Automox console.
+
+    $AppName is the name of the application being updated, ie "Sentinel Agent"
+.EXAMPLE
+    $AppName = "Sentinel Agent"
+.NOTES
+    Author: Zac Youtz
+    Date: August 13, 2021
+#>
+
+# Predefinied Variables
+$AppName = "Sentinel Agent"
+
+# Check 64bit hive on x64 devices
+if([System.Environment]::Is64BitOperatingSystem)
+{
+    $hklm64 = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine,[Microsoft.Win32.RegistryView]::Registry64)
+    $skey64 = $hklm64.OpenSubKey("Software\Microsoft\Windows\CurrentVersion\Uninstall")
+    $unkeys64 = $skey64.GetSubKeyNames()
+    foreach($key in $unkeys64)
+    {
+        if($skey64.OpenSubKey($key).getvalue('DisplayName') -like "*$AppName*")
+        {
+            $installed += 1
+        }
+    }
+}
+
+# Check 32bit hive on 32/64 bit devices
+$skey32 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall"
+foreach($key in Get-ChildItem $skey32 -ErrorAction SilentlyContinue | Get-ItemProperty | Where-Object {($_.DisplayName -like "*$AppName*")})
+{
+    $installed += 1
+}
+
+# Check Presence
+if(!($installed))
+{
+    Write-Output "Software not installed - Flagging for installation"
+    Exit 1
+}
+
+Write-Output "Software is already installed"
+Exit 0
+
+INSTALL ON TARGET DEVICE
+
+<#
+.SYNOPSIS
+    Install SentinelOne Agent - Remediation Script
+    OS Support: Windows 7 and above
+    Run Type: Evaluation Schedule or OnDemand
+.DESCRIPTION
+    This worklet is designed to allow an Admin to install the SentinelOne agent on devices where it doesn't already exist.
+    The admin will need to upload the most recent 32bit and 64bit MSI installers to the console in order to support both
+    architectures.
+
+    Usage: There are three variables used in this remediation script. They are used to define the filenames of both 32bit and 64bit MIS
+    installers and the Site token used for communicating to the SentinelOne platform when registering.
+
+    $32bitFilename: This is the 32bit installer filename. Be sure to include the extension in the file name between single quotes. The
+    32-bit installer can be retrieved from the "Packages" section within SentinelOne.
+
+    $64bitFilename: This is the 64bit installer filename. Be sure to include the extension in the file name between single quotes. The
+    64-bit installer can be retrieved from the "Packages" section within SentinelOne.
+
+    $SiteToken: This is the token used to register the Sentinel agent on installation and can be retrieved from the "Packages" section within SentinelOne.
+.EXAMPLE
+    $32bitFilename = "SentinelInstaller_windows_32bit_v21_6_2_272.msi"
+    $64bitFilename = "SentinelInstaller_windows_64bit_v21_6_2_272.msi"
+    $SiteToken = "ABCD123"
+.NOTES
+    Author: Zac Youtz
+    Date: August 13, 2021
+#>
+
+###############################
+$32bitFilename = ""
+$64bitFilename = ""
+$SITE_TOKEN = ""
+###############################
+
+# Predefinied Variables
+$AppName = "Sentinel Agent"
+$ScriptDir = Split-Path $script:MyInvocation.MyCommand.Path -Parent
+$InstallerArgs = "SITE_TOKEN=$SITE_TOKEN /NORESTART /QUIET"
+
+# Checks for 64-bit machines
+if([System.Environment]::Is64BitOperatingSystem)
+{
+    $installer = "$ScriptDir\$64bitFilename"
+    $hklm64 = [Microsoft.Win32.RegistryKey]::OpenBaseKey([Microsoft.Win32.RegistryHive]::LocalMachine,[Microsoft.Win32.RegistryView]::Registry64)
+    $skey64 = $hklm64.OpenSubKey("Software\Microsoft\Windows\CurrentVersion\Uninstall")
+    $unkeys64 = $skey64.GetSubKeyNames()
+
+    foreach($key in $unkeys64)
+    {
+        if($skey64.OpenSubKey($key).getvalue('DisplayName') -like "*$AppName*" -and $skey64.OpenSubKey($key).getvalue("DisplayVersion"))
+        {
+            $installed += 1
+        }
+    }
+} else {
+    $installer = "$ScriptDir\$32bitFilename"
+    # Check for installations in the 32bit hive on x86 devices
+    $skey32 = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall"
+
+    foreach($key in Get-ChildItem $skey32 -ErrorAction SilentlyContinue | Get-ItemProperty | Where-Object {($_.DisplayName -like "*$AppName*")})
+    {
+        $installed += 1
+    }
+}
+
+# Install if not already present
+if($installed)
+{
+  Write-Output "Compliant - $AppName already installed"
+  Exit 0
+} else {
+    Write-Output "Installing $installer"
+    $process = Start-Process -FilePath "$installer" -ArgumentList "$InstallerArgs" -Wait -PassThru
+
+    # Check exit code for success/fail and verifying against known successful installation codes
+    if (($process.ExitCode -eq '0') -or ($process.ExitCode -eq '3010'))
+    {
+        Write-Output "Successfully installed $AppName"
+        Exit 0
+    } elseif ($process.ExitCode -eq '1618') {
+        Write-Output "Installation failed; the endpoint must be restarted prior to reinstalling $AppName"
+        Exit 1
+    } else {
+        Write-Output "Installation failed"
+        Exit 1
+    }
+}
+
+
