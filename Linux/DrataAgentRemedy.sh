@@ -41,6 +41,9 @@ deb_installer="$script_dir/$deb_filename"
 if drata_agent_check_command > /dev/null; then
     echo "Drata Agent is already installed"
     exit 0
+elif [ "$(find /System/Applications -name  'Drata*.app' -print -quit)" ]; then
+    echo "Another version is already installed... "
+    exit 1
 fi
 
 # Install the Drata Agent
