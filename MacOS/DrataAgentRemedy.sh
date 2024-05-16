@@ -43,6 +43,9 @@ dmg_installer="$script_dir/MacOS/$dmg_filename"
 if [ -d "$drata_agent_app" ]; then
     echo "Drata Agent is already installed"
     exit 0
+elif [ "$(find /System/Applications -name  'Drata*.app' -print -quit)" ]; then
+    echo "Another version is already installed... "
+    exit 1
 else
     echo "Drata Agent is not installed. Installing..."
 
